@@ -27,7 +27,7 @@ fi
 # === 处理 update_domains.sh ===
 if [ "$USE_SUBSCRIPTION" = true ]; then
     echo "➡️ 使用订阅地址更新 domains.txt"
-    SCRIPT1_URL="https://114.com/update_domains.sh"
+    SCRIPT1_URL="https://raw.githubusercontent.com/Yinengjun/MiniSH/refs/heads/main/check_cf_domain/update_domains.sh"
     SCRIPT1_PATH="${INSTALL_DIR}/update_domains.sh"
     curl -fsSL "$SCRIPT1_URL" -o "$SCRIPT1_PATH" || { echo "❌ 下载失败: $SCRIPT1_URL"; exit 1; }
     sed -i "s|BOT_TOKEN=\"\"|BOT_TOKEN=\"${BOT_TOKEN}\"|g" "$SCRIPT1_PATH"
@@ -55,8 +55,8 @@ else
 fi
 
 # === 下载 check_cf_dns.sh ===
-SCRIPT2_URL="https://114.com/check_cf_dns.sh"
-SCRIPT2_PATH="${INSTALL_DIR}/check_cf_dns.sh"
+SCRIPT2_URL="https://raw.githubusercontent.com/Yinengjun/MiniSH/refs/heads/main/check_cf_domain/check_cf_domain.sh"
+SCRIPT2_PATH="${INSTALL_DIR}/check_cf_domain.sh"
 curl -fsSL "$SCRIPT2_URL" -o "$SCRIPT2_PATH" || { echo "❌ 下载失败: $SCRIPT2_URL"; exit 1; }
 sed -i "s|BOT_TOKEN=\"\"|BOT_TOKEN=\"${BOT_TOKEN}\"|g" "$SCRIPT2_PATH"
 sed -i "s|CHAT_ID=\"\"|CHAT_ID=\"${CHAT_ID}\"|g" "$SCRIPT2_PATH"

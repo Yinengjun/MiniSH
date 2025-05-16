@@ -2,7 +2,7 @@
 
 # 设置下载链接和保存路径
 URL=""
-DEST="/root/check_cf_domain/domains.txt"  # ⚠️ 修改为你实际要保存的路径
+DEST="./domains.txt"  # ⚠️ 修改为你实际要保存的路径
 
 # Telegram 相关
 BOT_TOKEN=""

@@ -20,7 +20,7 @@ mkdir -p "$INSTALL_DIR"
 read -p "请输入 domains.txt 订阅地址（可回车跳过）: " URL
 
 USE_SUBSCRIPTION=false
-if [ -n "$DOMAIN_URL" ]; then
+if [ -n "$URL" ]; then
     USE_SUBSCRIPTION=true
 fi
 
@@ -32,7 +32,7 @@ if [ "$USE_SUBSCRIPTION" = true ]; then
     curl -fsSL "$SCRIPT1_URL" -o "$SCRIPT1_PATH" || { echo "❌ 下载失败: $SCRIPT1_URL"; exit 1; }
     sed -i "s|BOT_TOKEN=\"\"|BOT_TOKEN=\"${BOT_TOKEN}\"|g" "$SCRIPT1_PATH"
     sed -i "s|CHAT_ID=\"\"|CHAT_ID=\"${CHAT_ID}\"|g" "$SCRIPT1_PATH"
-    sed -i "s|URL=\"\"|URL=\"${DOMAIN_URL}\"|g" "$SCRIPT1_PATH"
+    sed -i "s|URL=\"\"|URL=\"${URL}\"|g" "$SCRIPT1_PATH"
     chmod +x "$SCRIPT1_PATH"
 
     # 设置定时任务时间（可自定义）

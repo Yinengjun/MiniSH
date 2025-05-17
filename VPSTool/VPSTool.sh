@@ -810,6 +810,144 @@ service_management_menu() {
     done
 }
 
+# Docker
+docker_management_menu() {
+    if ! command -v docker &> /dev/null; then
+        echo "未检测到 Docker。"
+        echo "1. 安装 Docker"
+        echo "2. 返回主菜单"
+        read -p "请输入选项: " docker_missing_option
+        case $docker_missing_option in
+            1)
+                echo "正在安装 Docker..."
+                if [[ -f /etc/debian_version ]]; then
+                    sudo apt-get update
+                    sudo apt-get install -y \
+                        ca-certificates \
+                        curl \
+                        gnupg \
+                        lsb-release
+                    sudo mkdir -p /etc/apt/keyrings
+                    curl -fsSL https://download.docker.com/linux/$(. /etc/os-release && echo "$ID")/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+                    echo \
+                      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$(. /etc/os-release && echo "$ID") \
+                      $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                    sudo apt-get update
+                    sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+                    sudo systemctl enable docker
+                    sudo systemctl start docker
+                    echo "Docker 安装完成。"
+                else
+                    echo "当前系统不支持自动安装 Docker，请手动安装后重试。"
+                fi
+                read -p "按回车键继续..."
+                ;;
+            *)
+                echo "返回主菜单..."
+                sleep 1
+                return
+                ;;
+        esac
+    fi
+
+    while true; do
+        clear
+        echo "Docker 管理菜单"
+        echo "1. 查看容器列表"
+        echo "2. 查看镜像列表"
+        echo "3. 启动容器"
+        echo "4. 停止容器"
+        echo "5. 删除已停止的容器"
+        echo "6. 删除未使用的镜像"
+        echo "7. 清理所有未使用资源"
+        echo "8. 查看 Docker 占用空间"
+        echo "9. 重启容器"
+        echo "10. 查看容器日志"
+        echo "11. 进入容器"
+        echo "12. 设置容器资源限制"
+        echo "13. 设置容器重启规则"
+        echo "0. 返回主菜单"
+        read -p "请输入选项: " DOCKER_OPTION
+
+        case $DOCKER_OPTION in
+            1)
+                docker ps -a
+                read -p "按回车键继续..." ;;
+            2)
+                docker images
+                read -p "按回车键继续..." ;;
+            3)
+                docker ps -a --format "table {{.ID}}\t{{.Names}}\t{{.Status}}"
+                read -p "请输入要启动的容器ID或名称: " container_id
+                docker start "$container_id"
+                echo "容器 $container_id 已启动。"
+                read -p "按回车键继续..." ;;
+            4)
+                docker ps -a --format "table {{.ID}}\t{{.Names}}\t{{.Status}}"
+                read -p "请输入要停止的容器ID或名称: " container_id
+                docker stop "$container_id"
+                echo "容器 $container_id 已停止。"
+                read -p "按回车键继续..." ;;
+            5)
+                docker container prune -f
+                echo "已删除所有已停止的容器。"
+                read -p "按回车键继续..." ;;
+            6)
+                docker image prune -a -f
+                echo "已删除所有未使用的镜像。"
+                read -p "按回车键继续..." ;;
+            7)
+                docker system prune -a -f
+                echo "已清理所有未使用资源。"
+                read -p "按回车键继续..." ;;
+            8)
+                docker system df
+                read -p "按回车键继续..." ;;
+            9)
+                docker ps -a --format "table {{.ID}}\t{{.Names}}\t{{.Status}}"
+                read -p "请输入要重启的容器ID或名称: " container_id
+                docker restart "$container_id"
+                echo "容器 $container_id 已重启。"
+                read -p "按回车键继续..." ;;
+            10)
+                docker ps -a --format "table {{.ID}}\t{{.Names}}"
+                read -p "请输入要查看日志的容器ID或名称: " container_id
+                docker logs --tail 50 "$container_id"
+                read -p "按回车键继续..." ;;
+            11)
+                docker ps -a --format "table {{.ID}}\t{{.Names}}"
+                read -p "请输入要进入的容器ID或名称: " container_id
+                docker exec -it "$container_id" bash || docker exec -it "$container_id" sh
+                read -p "按回车键继续..." ;;
+            12)
+                docker ps -a --format "table {{.ID}}\t{{.Names}}"
+                read -p "请输入容器ID或名称: " container_id
+                read -p "请输入内存限制（例如 512m 或 1g，留空不修改）: " mem_limit
+                read -p "请输入 CPU 限制（如 0.5 表示50%，留空不修改）: " cpu_limit
+                update_cmd="docker update"
+                [[ -n "$mem_limit" ]] && update_cmd+=" --memory $mem_limit"
+                [[ -n "$cpu_limit" ]] && update_cmd+=" --cpus $cpu_limit"
+                update_cmd+=" $container_id"
+                eval "$update_cmd"
+                echo "资源限制已更新。"
+                read -p "按回车键继续..." ;;
+            13)
+                docker ps -a --format "table {{.ID}}\t{{.Names}}"
+                read -p "请输入容器ID或名称: " container_id
+                echo "可用重启策略：no | always | unless-stopped | on-failure"
+                read -p "请输入重启策略: " restart_policy
+                docker update --restart="$restart_policy" "$container_id"
+                echo "重启策略已设置为 $restart_policy。"
+                read -p "按回车键继续..." ;;
+            0)
+                break ;;
+            *)
+                echo "无效的选项，请重新输入。"
+                sleep 1 ;;
+        esac
+    done
+}
+
 # 显示菜单
 while true; do
     clear
@@ -831,6 +969,7 @@ while true; do
     echo "9. 安全与防滥用"
     echo "10. VPS"
     echo "11. 测试"
+    echo "12. Docker管理"
     echo "99. 系统设置"
     echo "0. 退出"
     read -p "请输入选项: " OPTION
@@ -922,6 +1061,9 @@ while true; do
             ;;
         11)
             test_menu
+            ;;
+        12)
+            docker_management_menu
             ;;
         99)
             system_settings_menu

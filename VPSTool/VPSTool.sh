@@ -574,6 +574,126 @@ function test_menu() {
     esac
 }
 
+# 显示 系统设置菜单
+system_settings_menu() {
+    while true; do
+        clear
+        echo "系统设置"
+        echo "1. 更改主机名"
+        echo "2. 管理计划任务"
+        echo "0. 返回主菜单"
+        read -p "请输入选项: " sys_option
+
+        case $sys_option in
+            1)
+                read -p "请输入新的主机名: " new_hostname
+                if [[ -n "$new_hostname" ]]; then
+                    sudo hostnamectl set-hostname "$new_hostname"
+                    echo "主机名已更改为: $new_hostname"
+                else
+                    echo "主机名不能为空。"
+                fi
+                read -p "按回车键继续..."
+                ;;
+            2)
+                cron_job_menu
+                ;;
+            0)
+                break
+                ;;
+            *)
+                echo "无效选项。"
+                read -p "按回车键继续..."
+                ;;
+        esac
+    done
+}
+
+# 管理计划任务
+cron_job_menu() {
+    while true; do
+        clear
+        echo "计划任务管理"
+        echo "1. 查看当前用户计划任务"
+        echo "2. 编辑当前用户计划任务"
+        echo "3. 清空当前用户计划任务"
+        echo "4. 简单添加当前用户计划任务"
+        echo "0. 返回上级菜单"
+        read -p "请输入选项: " cron_option
+
+        case $cron_option in
+            1)
+                echo "当前计划任务："
+                crontab -l || echo "无计划任务或 crontab 未设置。"
+                read -p "按回车键继续..."
+                ;;
+            2)
+                crontab -e
+                ;;
+            3)
+                crontab -r
+                echo "已清空当前用户计划任务。"
+                read -p "按回车键继续..."
+                ;;
+            4)
+                # 简单添加任务
+                echo "=== 添加新计划任务 ==="
+                # 1) 选择常用周期或自定义
+                echo "请选择调度周期："
+                echo " 1) 每分钟  2) 每小时  3) 每天  4) 每周  5) 每月  6) 自定义"
+                read -p "输入序号 [1-6]: " sched_choice
+
+                case $sched_choice in
+                    1) cron_expr="* * * * *" ;;
+                    2) cron_expr="0 * * * *" ;;
+                    3) cron_expr="0 0 * * *" ;;
+                    4) cron_expr="0 0 * * 0" ;;
+                    5) cron_expr="0 0 1 * *" ;;
+                    6)
+                        read -p "分钟 (0-59, 用逗号/短横/星号): " m
+                        read -p "小时 (0-23, 用逗号/短横/星号): " h
+                        read -p "日 (1-31, 用逗号/短横/星号): " dom
+                        read -p "月 (1-12, 用逗号/短横/星号): " mon
+                        read -p "周几 (0-7, 用逗号/短横/星号, 0和7都代表周日): " dow
+                        cron_expr="$m $h $dom $mon $dow"
+                        ;;
+                    *)
+                        echo "无效选项，使用默认“每天”"
+                        cron_expr="0 0 * * *"
+                        ;;
+                esac
+
+                # 2) 询问要执行的命令
+                read -p "请输入要执行的命令或脚本（完整路径）： " cmd
+                if [[ -z "$cmd" ]]; then
+                    echo "命令不能为空，添加取消。"
+                else
+                    new_entry="$cron_expr $cmd"
+                    existing=$(crontab -l 2>/dev/null)
+
+                    if echo "$existing" | grep -Fxq "$new_entry"; then
+                        echo "⚠️ 该计划任务已存在，不会重复添加："
+                        echo "   $new_entry"
+                    else
+                        ( echo "$existing"; echo "$new_entry" ) | crontab -
+                        echo "✅ 已添加新任务："
+                        echo "   $new_entry"
+                    fi
+                fi
+                read -p "按回车键继续..."
+                ;;
+            0)
+                break
+                ;;
+            *)
+                echo "无效选项。"
+                read -p "按回车键继续..."
+                ;;
+        esac
+    done
+}
+
+
 # 显示菜单
 while true; do
     clear
@@ -595,6 +715,7 @@ while true; do
     echo "9. 安全与防滥用"
     echo "10. VPS"
     echo "11. 测试"
+    echo "99. 系统设置"
     echo "0. 退出"
     read -p "请输入选项: " OPTION
 
@@ -685,6 +806,9 @@ while true; do
             ;;
         11)
             test_menu
+            ;;
+        99)
+            system_settings_menu
             ;;
         0)
             echo "退出脚本。"

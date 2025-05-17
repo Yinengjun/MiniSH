@@ -581,6 +581,8 @@ system_settings_menu() {
         echo "系统设置"
         echo "1. 更改主机名"
         echo "2. 管理计划任务"
+        echo "3. 切换软件源"
+        echo "4. 服务管理"
         echo "0. 返回主菜单"
         read -p "请输入选项: " sys_option
 
@@ -597,6 +599,14 @@ system_settings_menu() {
                 ;;
             2)
                 cron_job_menu
+                ;;
+            3)
+                echo "正在切换软件源…"
+                bash <(curl -sSL https://linuxmirrors.cn/main.sh)
+                read -p "按回车键继续..."
+                ;;
+            4)
+                service_management_menu
                 ;;
             0)
                 break
@@ -618,6 +628,7 @@ cron_job_menu() {
         echo "2. 编辑当前用户计划任务"
         echo "3. 清空当前用户计划任务"
         echo "4. 简单添加当前用户计划任务"
+        echo "5. 删除特定当前用户计划任务"
         echo "0. 返回上级菜单"
         read -p "请输入选项: " cron_option
 
@@ -682,6 +693,54 @@ cron_job_menu() {
                 fi
                 read -p "按回车键继续..."
                 ;;
+            5)
+                # 删除特定任务
+                echo "=== 删除计划任务 ==="
+                # 读取现有任务到数组
+                mapfile -t lines < <(crontab -l 2>/dev/null)
+                if [ ${#lines[@]} -eq 0 ]; then
+                    echo "当前没有任何计划任务。"
+                    read -p "按回车键继续..."
+                    continue
+                fi
+
+                # 列出并编号
+                echo "0) 取消"
+                for i in "${!lines[@]}"; do
+                    idx=$((i+1))
+                    printf "%2d) %s\n" "$idx" "${lines[i]}"
+                done
+
+                # 读用户选择
+                read -p "请输入要删除的任务编号: " del_idx
+                if ! [[ "$del_idx" =~ ^[0-9]+$ ]] || [ "$del_idx" -lt 0 ] || [ "$del_idx" -gt ${#lines[@]} ]; then
+                    echo "无效编号，取消操作。"
+                elif [ "$del_idx" -eq 0 ]; then
+                    echo "已取消。"
+                else
+                    # 确认
+                    sel="${lines[$((del_idx-1))]}"
+                    read -p "确认删除以下任务？[y/N]: $sel  " yn
+                    case "$yn" in
+                        [Yy]*)
+                            # 从数组中过滤掉选中行
+                            new_lines=()
+                            for j in "${!lines[@]}"; do
+                                [ $j -eq $((del_idx-1)) ] && continue
+                                new_lines+=("${lines[j]}")
+                            done
+                            # 写回 crontab
+                            printf "%s\n" "${new_lines[@]}" | crontab -
+                            echo "已删除任务："
+                            echo "  $sel"
+                            ;;
+                        *)
+                            echo "已取消删除。"
+                            ;;
+                    esac
+                fi
+                read -p "按回车键继续..."
+                ;;
             0)
                 break
                 ;;
@@ -693,6 +752,63 @@ cron_job_menu() {
     done
 }
 
+# 服务管理
+service_management_menu() {
+    # 你可以在这里添加或调整常用服务名称
+    local services=("sshd" "nginx" "docker" "自定义服务")
+    while true; do
+        clear
+        echo "服务管理"
+        for i in "${!services[@]}"; do
+            printf "%2d) %s\n" "$((i+1))" "${services[i]}"
+        done
+        echo " 0) 返回上级菜单"
+        read -p "请选择要管理的服务: " svc_idx
+
+        # 返回主菜单
+        if [[ "$svc_idx" == "0" ]]; then
+            break
+        fi
+
+        # 检查索引合法性
+        if ! [[ "$svc_idx" =~ ^[1-9]$ ]] || [ "$svc_idx" -gt "${#services[@]}" ]; then
+            echo "无效编号。"
+            read -p "按回车键继续..."
+            continue
+        fi
+
+        # 读取服务名
+        svc="${services[$((svc_idx-1))]}"
+        if [[ "$svc" == "自定义服务" ]]; then
+            read -p "请输入自定义服务名称（systemctl 名称）: " svc
+            [[ -z "$svc" ]] && { echo "服务名不能为空。"; read -p "按回车键继续..."; continue; }
+        fi
+
+        # 操作子菜单
+        while true; do
+            clear
+            echo "管理服务: $svc"
+            echo " 1) 查看状态"
+            echo " 2) 启动"
+            echo " 3) 停止"
+            echo " 4) 重启"
+            echo " 5) 重新加载配置"
+            echo " 0) 返回上级菜单"
+            read -p "请选择操作: " action
+
+            case $action in
+                1) sudo systemctl status "$svc";;
+                2) sudo systemctl start "$svc" && echo "$svc 已启动";;
+                3) sudo systemctl stop "$svc" && echo "$svc 已停止";;
+                4) sudo systemctl restart "$svc" && echo "$svc 已重启";;
+                5) sudo systemctl reload "$svc" && echo "$svc 配置已重新加载";;
+                0) break;;
+                *) echo "无效选项。";;
+            esac
+            read -p "按回车键继续..."
+        done
+    done
+}
 
 # 显示菜单
 while true; do

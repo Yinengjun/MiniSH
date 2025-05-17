@@ -403,6 +403,8 @@ network_security_menu() {
         echo "6. 屏蔽测速站"
         echo "7. 查看密码登陆成功的IP地址及其次数"
         echo "8. 查看密码登陆失败的IP地址及其次数"
+        echo "9. 指定国家蔽连接"
+        echo "10. 指定端口屏蔽大陆连接"
         echo "0. 返回上级菜单"
         read -p "请输入选项: " SECURITY_OPTION
 
@@ -449,6 +451,32 @@ network_security_menu() {
                 echo "密码登陆失败的IP地址及其次数"
                 grep "Failed password for root" /var/log/auth.log | awk '{print $11}' | sort | uniq -c | sort -nr | more
                 ;;
+            9)
+                echo "指定国家蔽连接"
+                if [[ -f ./block-ips.sh ]]; then
+                    echo "已存在 block-ips.sh，正在执行..."
+                    chmod +x ./block-ips.sh
+                    ./block-ips.sh
+                else
+                    echo "下载并安装 block-ips.sh..."
+                    wget -O block-ips.sh https://raw.githubusercontent.com/iiiiiii1/Block-IPs-from-countries/refs/heads/master/block-ips.sh
+                    chmod +x block-ips.sh
+                    ./block-ips.sh
+                fi
+                ;;
+            10)
+                echo "指定端口屏蔽大陆连接"
+                if [[ -f ./cnblock.sh ]]; then
+                    echo "已存在 cnblock.sh，正在执行..."
+                    chmod +x ./cnblock.sh
+                    ./cnblock.sh
+                else
+                    echo "下载并安装 cnblock.sh..."
+                    wget -O cnblock.sh https://gitlab.com/gitlabvps1/cnipblocker/-/raw/main/cnblock.sh
+                    chmod +x cnblock.sh
+                    ./cnblock.sh
+                fi
+                ;;
             0)
                 return
                 ;;
@@ -456,6 +484,8 @@ network_security_menu() {
                 echo "无效的选项"
                 ;;
         esac
+        echo ""
+        read -p "按 Enter 键继续..." temp
     done
 }
 
@@ -583,6 +613,7 @@ system_settings_menu() {
         echo "2. 管理计划任务"
         echo "3. 切换软件源"
         echo "4. 服务管理"
+        echo "5. 设置时区"
         echo "0. 返回主菜单"
         read -p "请输入选项: " sys_option
 
@@ -607,6 +638,9 @@ system_settings_menu() {
                 ;;
             4)
                 service_management_menu
+                ;;
+            5)
+                set_timezone_menu
                 ;;
             0)
                 break

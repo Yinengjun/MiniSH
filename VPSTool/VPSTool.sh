@@ -810,6 +810,72 @@ service_management_menu() {
     done
 }
 
+# 设置时区
+set_timezone_menu() {
+    while true; do
+        clear
+        current_tz=$(timedatectl | grep "Time zone" | awk '{print $3}')
+        echo "当前时区：$current_tz"
+        echo
+        echo "1. 修改时区"
+        echo "2. 退出"
+        read -p "请选择操作: " opt
+
+        case $opt in
+            1)
+                while true; do
+                    clear
+                    echo "请选择时区（常见选项）："
+                    echo "1. Asia/Shanghai (中国标准时间)"
+                    echo "2. Asia/Tokyo (日本)"
+                    echo "3. Asia/Kolkata (印度)"
+                    echo "4. Europe/London (英国)"
+                    echo "5. America/New_York (纽约)"
+                    echo "6. Australia/Sydney (悉尼)"
+                    echo "7. 自定义（输入 UTC 偏移）"
+                    echo "0. 返回"
+                    read -p "请输入选项: " tz_opt
+
+                    case $tz_opt in
+                        1) tz="Asia/Shanghai" ;;
+                        2) tz="Asia/Tokyo" ;;
+                        3) tz="Asia/Kolkata" ;;
+                        4) tz="Europe/London" ;;
+                        5) tz="America/New_York" ;;
+                        6) tz="Australia/Sydney" ;;
+                        7)
+                            read -p "请输入 UTC 偏移（如 +8 或 -5）: " offset
+                            # 转换为 Region/City 格式（根据偏移推断）
+                            tz=$(timedatectl list-timezones | grep -E "Etc/GMT[-+]" | grep "Etc/GMT$((-1 * offset))")
+                            if [[ -z "$tz" ]]; then
+                                echo "不支持的偏移值，请输入范围在 -12 到 +14。"
+                                read -p "按回车键继续..."
+                                continue
+                            fi
+                            ;;
+                        0) break ;;
+                        *) echo "无效选项"; read -p "按回车键继续..."; continue ;;
+                    esac
+
+                    if [[ -n "$tz" ]]; then
+                        sudo timedatectl set-timezone "$tz"
+                        echo "已设置时区为：$tz"
+                        read -p "按回车键继续..."
+                        break
+                    fi
+                done
+                ;;
+            2)
+                break
+                ;;
+            *)
+                echo "无效选项"
+                read -p "按回车键继续..."
+                ;;
+        esac
+    done
+}
+
 # Docker
 docker_management_menu() {
     if ! command -v docker &> /dev/null; then

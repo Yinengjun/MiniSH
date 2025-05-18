@@ -410,9 +410,7 @@ network_security_menu() {
 
         case $SECURITY_OPTION in
             1)
-                echo "正在安装UFW防火墙..."
-                sudo apt-get install -y ufw
-                echo "UFW防火墙已安装。"
+                UFW_menu
                 ;;
             2)
                 echo "正在安装Fail2ban SSH防护..."
@@ -488,6 +486,261 @@ network_security_menu() {
         read -p "按 Enter 键继续..." temp
     done
 }
+
+# UFW管理菜单函数
+UFW_menu() {
+    while true; do
+        echo "UFW 防火墙"
+        echo "1. 安装 UFW"
+        echo "2. 状态检查"
+        echo "3. 启动 UFW"
+        echo "4. 关闭 UFW"
+        echo "5. 重启 UFW"
+        echo "6. 查看规则"
+        echo "7. 添加规则"
+        echo "8. 删除规则"
+        echo "9. 删除所有规则"
+        echo "10. 查看日志"
+        echo "11. 退出"
+        read -p "请输入选项 [1-11]: " choice
+
+        case $choice in
+            1)
+                echo "正在安装 UFW..."
+                apt update && apt install -y ufw
+                echo "UFW 安装完成。"
+                ;;
+            2)
+                status=$(ufw status | head -n 1)
+                echo "当前状态: $status"
+                if [[ "$status" == "Status: inactive" ]]; then
+                    read -p "UFW 未启用。是否现在启用？(yes/no): " enable_now
+                    if [[ $enable_now == "yes" ]]; then
+                        ufw enable
+                        echo "UFW 已启用。"
+                    fi
+                fi
+                ;;
+            3)
+                ufw enable
+                echo "UFW 已启动。"
+                ;;
+            4)
+                ufw disable
+                echo "UFW 已关闭。"
+                ;;
+            5)
+                echo "重启 UFW（先关闭再启动）..."
+                ufw disable
+                ufw enable
+                echo "UFW 已重启。"
+                ;;
+            6)
+                echo "1. 仅查看允许规则 (ALLOW)"
+                echo "2. 仅查看禁止规则 (DENY)"
+                echo "3. 常见端口规则 (22, 80, 443, 8080)"
+                echo "4. 查看全部规则"
+                read -p "请选择 [1-4]: " filter_choice
+
+                case $filter_choice in
+                    1)
+                        rules=($(ufw status numbered | sed '1d' | grep -i "ALLOW"))
+                        ;;
+                    2)
+                        rules=($(ufw status numbered | sed '1d' | grep -i "DENY"))
+                        ;;
+                    3)
+                        rules=($(ufw status numbered | sed '1d' | grep -E "22|80|443|8080"))
+                        ;;
+                    *)
+                        rules=($(ufw status numbered | sed '1d'))
+                        ;;
+                esac
+
+                total_lines=${#rules[@]}
+                page=0
+                per_page=20
+
+                while true; do
+                    clear
+                    echo "-------- UFW 规则 (分页显示) --------"
+                    start=$((page * per_page))
+                    end=$((start + per_page - 1))
+
+                    if [ $start -ge $total_lines ]; then
+                        echo "没有更多规则了。"
+                        break
+                    fi
+
+                    for i in $(seq $start $end); do
+                        if [ $i -lt $total_lines ]; then
+                            echo "${rules[$i]}"
+                        fi
+                    done
+
+                    echo "-------------------------------------"
+                    echo "页数：$((page + 1)) / $(( (total_lines + per_page - 1) / per_page ))"
+                    echo "[n] 下一页 | [p] 上一页 | [b] 返回主菜单"
+                    read -p "请选择操作: " nav
+
+                    case $nav in
+                        n)
+                            page=$((page + 1))
+                            ;;
+                        p)
+                            if [ $page -gt 0 ]; then
+                                page=$((page - 1))
+                            fi
+                            ;;
+                        b)
+                            break
+                            ;;
+                        *)
+                            echo "无效输入。"
+                            sleep 1
+                            ;;
+                    esac
+                done
+                ;;
+            7)
+                add_UFW_rule_menu
+                ;;
+            8)
+                ufw status numbered
+                read -p "请输入要删除的规则编号：" rule_num
+                ufw delete $rule_num
+                echo "规则 $rule_num 已删除。"
+                ;;
+            9)
+                echo "⚠️ 警告：将删除所有规则！"
+                read -p "确认删除所有规则？(yes/no): " confirm
+                if [[ $confirm == "yes" ]]; then
+                    ufw reset
+                    echo "所有规则已重置（删除）。"
+                else
+                    echo "操作取消。"
+                fi
+                ;;
+            10)
+                echo "启用日志记录..."
+                ufw logging on
+                echo "最近 UFW 日志（按 Ctrl+C 退出）:"
+                sleep 1
+                tail -f /var/log/ufw.log
+                ;;
+            11)
+                echo "退出 UFW 管理菜单。"
+                break
+                ;;
+            *)
+                echo "无效选项，请输入 1-11 之间的数字。"
+                ;;
+        esac
+        echo ""
+    done
+}
+
+add_UFW_rule_menu() {
+    while true; do
+        echo "添加 UFW 规则"
+        echo "1. 简单规则 (对象 + 操作 + 端口 + 协议)"
+        echo "2. 自定义规则 (手动输入)"
+        echo "3. 放行 WEB 端口 (80, 443)"
+        echo "4. 放行 SSH (22)"
+        echo "5. 放行常见服务端口 (8080)"
+        echo "6. 一键放行常用组合 (22, 80, 443, 8080)"
+        echo "7. 返回上一级"
+        read -p "请选择 [1-7]: " sub_choice
+
+        case $sub_choice in
+            1)
+                read -p "目标对象（回车跳过，支持 IP / 网段）： " target
+                read -p "操作类型（allow 或 deny）： " action
+                if [[ "$action" != "allow" && "$action" != "deny" ]]; then
+                    echo "无效操作类型，仅支持 allow 或 deny。"
+                    continue
+                fi
+
+                read -p "端口号（单个: 80，多个: 80,443，范围: 1000:2000）： " ports
+                if ! [[ "$ports" =~ ^[0-9:,]+$ ]]; then
+                    echo "端口格式错误，请使用合法格式（80,443 或 1000:2000）"
+                    continue
+                fi
+
+                read -p "协议（tcp / udp / any，默认 any）： " proto
+                proto=${proto,,}
+                [[ -z "$proto" ]] && proto="any"
+                if [[ "$proto" != "tcp" && "$proto" != "udp" && "$proto" != "any" ]]; then
+                    echo "协议必须为 tcp、udp 或 any。"
+                    continue
+                fi
+
+                rule_desc="$action $proto port $ports"
+                [[ -n "$target" ]] && rule_desc+=" from $target"
+
+                if ufw status | grep -iq "$action.*$ports.*$proto"; then
+                    echo "规则已存在：$rule_desc"
+                else
+                    cmd="ufw $action proto $proto to any port $ports"
+                    [[ -n "$target" ]] && cmd+=" from $target"
+                    echo "执行：$cmd"
+                    eval $cmd
+                fi
+                ;;
+            2)
+                read -p "请输入完整自定义命令（例如 allow from 192.168.1.0/24 to any port 80 proto tcp）: ufw " custom
+                if ufw status | grep -iq "$custom"; then
+                    echo "规则已存在：ufw $custom"
+                else
+                    ufw $custom
+                fi
+                ;;
+            3)
+                for port in 80 443; do
+                    if ufw status | grep -iq "$port/tcp"; then
+                        echo "规则已存在：$port/tcp"
+                    else
+                        ufw allow $port/tcp
+                    fi
+                done
+                ;;
+            4)
+                if ufw status | grep -iq "22/tcp"; then
+                    echo "规则已存在：22/tcp"
+                else
+                    ufw allow 22/tcp
+                fi
+                ;;
+            5)
+                if ufw status | grep -iq "8080/tcp"; then
+                    echo "规则已存在：8080/tcp"
+                else
+                    ufw allow 8080/tcp
+                fi
+                ;;
+            6)
+                for port in 22 80 443 8080; do
+                    if ufw status | grep -iq "$port/tcp"; then
+                        echo "规则已存在：$port/tcp"
+                    else
+                        ufw allow $port/tcp
+                        echo "已放行：$port/tcp"
+                    fi
+                done
+                ;;
+            7)
+                echo "返回主菜单。"
+                break
+                ;;
+            *)
+                echo "无效选项，请输入 1-7。"
+                ;;
+        esac
+        echo ""
+    done
+}
+
+
 
 # 安装 iPerf3
 install_iperf3() {

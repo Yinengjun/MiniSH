@@ -232,7 +232,6 @@ configure_dual_stack_dns() {
     echo "网络服务已重启。"
 }
 
-
 # 设置DNS
 configure_dns() {
     clear
@@ -501,8 +500,8 @@ UFW_menu() {
         echo "8. 删除规则"
         echo "9. 删除所有规则"
         echo "10. 查看日志"
-        echo "11. 退出"
-        read -p "请输入选项 [1-11]: " choice
+        echo "0. 退出"
+        read -p "请输入选项 [0-10]: " choice
 
         case $choice in
             1)
@@ -628,7 +627,7 @@ UFW_menu() {
                 sleep 1
                 tail -f /var/log/ufw.log
                 ;;
-            11)
+            0)
                 echo "退出 UFW 管理菜单。"
                 break
                 ;;
@@ -640,6 +639,7 @@ UFW_menu() {
     done
 }
 
+# 添加UFW规则
 add_UFW_rule_menu() {
     while true; do
         echo "添加 UFW 规则"
@@ -739,8 +739,6 @@ add_UFW_rule_menu() {
         echo ""
     done
 }
-
-
 
 # 安装 iPerf3
 install_iperf3() {
@@ -867,6 +865,10 @@ system_settings_menu() {
         echo "3. 切换软件源"
         echo "4. 服务管理"
         echo "5. 设置时区"
+        echo "6. 修改 Swap 大小"
+        echo "7. 查看端口占用"
+        echo "8. 重启系统"
+        echo "9. 修改登录密码"
         echo "0. 返回主菜单"
         read -p "请输入选项: " sys_option
 
@@ -894,6 +896,74 @@ system_settings_menu() {
                 ;;
             5)
                 set_timezone_menu
+                ;;
+            6)
+                total_mem=$(free -m | awk '/^Mem:/{print $2}')
+                recommended_swap=$(awk 'BEGIN {
+                    m='$total_mem'*2;
+                    p=512;
+                    while(p<m){ p*=2 };
+                    print p
+                }')
+                echo "系统内存：${total_mem}MB"
+                echo "推荐 Swap 大小：${recommended_swap}MB (内存约两倍，2 的指数)"
+                read -p "请输入新的 Swap 大小（单位 MB，默认：${recommended_swap}）: " swap_size
+                swap_size=${swap_size:-$recommended_swap}
+                if [[ "$swap_size" =~ ^[0-9]+$ ]]; then
+                    sudo swapoff -a
+                    sudo dd if=/dev/zero of=/swapfile bs=1M count=$swap_size status=progress
+                    sudo chmod 600 /swapfile
+                    sudo mkswap /swapfile
+                    sudo swapon /swapfile
+                    sudo sed -i '/\/swapfile/d' /etc/fstab
+                    echo "/swapfile none swap sw 0 0" | sudo tee -a /etc/fstab > /dev/null
+                    echo "Swap 大小已设置为 ${swap_size}MB。"
+                else
+                    echo "请输入有效的数字。"
+                fi
+                read -p "按回车键继续..."
+                ;;
+            7)
+                read -p "请输入要查看的端口（留空查看所有端口）: " port
+                if [[ -n "$port" ]]; then
+                    sudo lsof -i :$port
+                else
+                    sudo ss -tuln
+                fi
+                read -p "按回车键继续..."
+                ;;
+            8)
+                read -p "确认重启系统？[y/N]: " confirm
+                if [[ "$confirm" =~ ^[yY]$ ]]; then
+                    sudo reboot
+                fi
+                ;;
+            9)
+                echo "修改登录密码"
+                echo "1) 当前用户（$(whoami)）"
+                echo "2) 指定用户"
+                read -p "请选择选项: " pwd_option
+                if [[ "$pwd_option" == "1" ]]; then
+                    echo "为当前用户设置密码：$(whoami)"
+                    sudo passwd $(whoami)
+                elif [[ "$pwd_option" == "2" ]]; then
+                    echo "系统用户列表："
+                    users=($(cut -d: -f1 /etc/passwd | grep -E -v '^(nobody|root|daemon|bin|sys|sync|games|man|lp|mail|news|uucp|proxy|www-data|backup|list|irc|gnats|systemd|_.*|halt|operator|gdm|sshd|messagebus|usbmuxd|uuidd|avahi|dnsmasq|ntp|nfsnobody|rpc|polkitd|dbus|tcpdump|mysql|postgres|ftp|rpcuser|named|mailnull|smmsp|apache|xfs|vcsa|postfix|qemu|saslauth|chrony|dhcpd|nginx|firewalld|nm-openconnect|lightdm|systemd-resolve|systemd-network)$'))
+                    for i in "${!users[@]}"; do
+                        echo "$i) ${users[$i]}"
+                    done
+                    read -p "请输入用户序号: " user_index
+                    selected_user=${users[$user_index]}
+                    if [[ -n "$selected_user" ]]; then
+                        echo "为用户 $selected_user 设置密码："
+                        sudo passwd "$selected_user"
+                    else
+                        echo "无效的用户序号。"
+                    fi
+                else
+                    echo "无效选项。"
+                fi
+                read -p "按回车键继续..."
                 ;;
             0)
                 break
@@ -1368,6 +1438,7 @@ while true; do
         5)
             # 用户选择清理模式
             clear
+            du -sh /var/log/
             echo "请选择清理模式："
             echo "1. 常规清理"
             echo "2. 深度清理"

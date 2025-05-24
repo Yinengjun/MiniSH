@@ -5,7 +5,7 @@ SCRIPT_PATH="$(realpath "$0")"
 LINK_PATH="/usr/local/bin/v"
 
 # 安装逻辑
-if [[ "$1" == "--install" ]]; then
+if [[ "$1" == "install" || "$1" == "--install" ]]; then
     echo "正在安装..."
     if [[ -L "$LINK_PATH" || -f "$LINK_PATH" ]]; then
         echo "已有 $LINK_PATH，将被覆盖"
@@ -18,7 +18,7 @@ if [[ "$1" == "--install" ]]; then
 fi
 
 # 卸载逻辑
-if [[ "$1" == "--uninstall" ]]; then
+if [[ "$1" == "uninstall" || "$1" == "--uninstall" ]]; then
     echo "正在卸载..."
     if [[ -L "$LINK_PATH" || -f "$LINK_PATH" ]]; then
         sudo rm -f "$LINK_PATH"

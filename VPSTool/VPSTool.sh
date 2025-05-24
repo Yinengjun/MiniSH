@@ -1,5 +1,34 @@
 #!/bin/bash
 
+# 获取当前脚本的绝对路径
+SCRIPT_PATH="$(realpath "$0")"
+LINK_PATH="/usr/local/bin/v"
+
+# 安装逻辑
+if [[ "$1" == "--install" ]]; then
+    echo "正在安装..."
+    if [[ -L "$LINK_PATH" || -f "$LINK_PATH" ]]; then
+        echo "已有 $LINK_PATH，将被覆盖"
+        sudo rm -f "$LINK_PATH"
+    fi
+    sudo ln -s "$SCRIPT_PATH" "$LINK_PATH"
+    sudo chmod +x "$SCRIPT_PATH"
+    echo "已安装完成，可使用 'v' 命令运行。"
+    exit 0
+fi
+
+# 卸载逻辑
+if [[ "$1" == "--uninstall" ]]; then
+    echo "正在卸载..."
+    if [[ -L "$LINK_PATH" || -f "$LINK_PATH" ]]; then
+        sudo rm -f "$LINK_PATH"
+        echo "已卸载 v"
+    else
+        echo "未找到 $LINK_PATH，跳过"
+    fi
+    exit 0
+fi
+
 # 获取系统信息
 get_os_name() {
     if [ -f /etc/os-release ]; then

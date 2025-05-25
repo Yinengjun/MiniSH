@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 获取当前脚本的绝对路径
-SCRIPT_PATH="$(realpath "$0")"
+SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 LINK_PATH="/usr/local/bin/v"
 
 # 安装逻辑
@@ -1264,138 +1264,268 @@ set_timezone_menu() {
 
 # Docker
 docker_management_menu() {
+    # 安装入口
     if ! command -v docker &> /dev/null; then
         echo "未检测到 Docker。"
         echo "1. 安装 Docker"
         echo "2. 返回主菜单"
-        read -p "请输入选项: " docker_missing_option
-        case $docker_missing_option in
+        read -p "请输入选项: " opt
+        case $opt in
             1)
                 echo "正在安装 Docker..."
                 if [[ -f /etc/debian_version ]]; then
                     sudo apt-get update
-                    sudo apt-get install -y \
-                        ca-certificates \
-                        curl \
-                        gnupg \
-                        lsb-release
+                    sudo apt-get install -y ca-certificates curl gnupg lsb-release
                     sudo mkdir -p /etc/apt/keyrings
-                    curl -fsSL https://download.docker.com/linux/$(. /etc/os-release && echo "$ID")/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+                    curl -fsSL https://download.docker.com/linux/"$(. /etc/os-release && echo "$ID")"/gpg \
+                      | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
                     echo \
-                      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$(. /etc/os-release && echo "$ID") \
-                      $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+                      https://download.docker.com/linux/$(. /etc/os-release && echo "$ID") \
+                      $(lsb_release -cs) stable" \
+                      | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
                     sudo apt-get update
-                    sudo apt-get install -y docker-ce docker-ce-cli containerd.io
-                    sudo systemctl enable docker
-                    sudo systemctl start docker
+                    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+                    sudo systemctl enable docker && sudo systemctl start docker
                     echo "Docker 安装完成。"
                 else
-                    echo "当前系统不支持自动安装 Docker，请手动安装后重试。"
+                    echo "当前系统不支持自动安装，请手动安装 Docker 后重试。"
                 fi
-                read -p "按回车键继续..."
+                read -p "按回车继续…"
                 ;;
             *)
-                echo "返回主菜单..."
-                sleep 1
                 return
                 ;;
         esac
     fi
 
+    # 主循环
     while true; do
         clear
-        echo "Docker 管理菜单"
-        echo "1. 查看容器列表"
-        echo "2. 查看镜像列表"
-        echo "3. 启动容器"
-        echo "4. 停止容器"
-        echo "5. 删除已停止的容器"
-        echo "6. 删除未使用的镜像"
-        echo "7. 清理所有未使用资源"
-        echo "8. 查看 Docker 占用空间"
-        echo "9. 重启容器"
-        echo "10. 查看容器日志"
-        echo "11. 进入容器"
-        echo "12. 设置容器资源限制"
-        echo "13. 设置容器重启规则"
-        echo "0. 返回主菜单"
-        read -p "请输入选项: " DOCKER_OPTION
+        echo "=== Docker 管理菜单 ==="
+        echo "--- 容器操作 ---"
+        echo " 1) 列出所有容器"
+        echo " 2) 启动容器"
+        echo " 3) 停止容器"
+        echo " 4) 重启容器"
+        echo " 5) 进入容器"
+        echo " 6) 批量操作（按标签）"
+        echo
+        echo "--- 镜像与资源 ---"
+        echo " 7) 列出所有镜像"
+        echo " 8) 删除未使用镜像"
+        echo " 9) 查看空间占用"
+        echo
+        echo "--- 清理与回收 ---"
+        echo "10) 删除已停止容器"
+        echo "11) 清理所有未使用资源"
+        echo "12) 设置定时清理"
+        echo
+        echo "--- 日志与监控 ---"
+        echo "13) 查看容器日志"
+        echo "14) 聚合日志到文件"
+        echo "15) 实时监控资源（docker stats）"
+        echo
+        echo "--- 配置与设置 ---"
+        echo "16) 设置资源限制"
+        echo "17) 设置重启策略"
+        echo
+        echo "--- 网络管理 ---"
+        echo "18) 列出网络"
+        echo "19) 创建网络"
+        echo "20) 删除网络"
+        echo
+        echo "--- 卷管理 ---"
+        echo "21) 列出数据卷"
+        echo "22) 备份数据卷"
+        echo "23) 恢复数据卷"
+        echo "24) 删除数据卷"
+        echo
+        echo "--- Compose 管理 ---"
+        echo "25) docker-compose up"
+        echo "26) docker-compose down"
+        echo "27) Compose 服务状态"
+        echo "28) 重建 Compose 服务"
+        echo
+        echo "--- 系统级功能 ---"
+        echo "29) 检查并升级 Docker"
+        echo "30) 完全卸载 Docker"
+        echo
+        echo " 0) 返回上级菜单"
+        read -p "请选择: " choice
 
-        case $DOCKER_OPTION in
-            1)
-                docker ps -a
-                read -p "按回车键继续..." ;;
+        case $choice in
+            1) docker ps -a; read -p "按回车继续…";;
             2)
-                docker images
-                read -p "按回车键继续..." ;;
+                docker ps -a --format "table {{.ID}}\t{{.Names}}\t{{.Status}}"
+                read -p "容器ID或名称: " cid
+                docker start "$cid" && echo "已启动 $cid"
+                read -p "按回车继续…"
+                ;;
             3)
                 docker ps -a --format "table {{.ID}}\t{{.Names}}\t{{.Status}}"
-                read -p "请输入要启动的容器ID或名称: " container_id
-                docker start "$container_id"
-                echo "容器 $container_id 已启动。"
-                read -p "按回车键继续..." ;;
+                read -p "容器ID或名称: " cid
+                docker stop "$cid" && echo "已停止 $cid"
+                read -p "按回车继续…"
+                ;;
             4)
                 docker ps -a --format "table {{.ID}}\t{{.Names}}\t{{.Status}}"
-                read -p "请输入要停止的容器ID或名称: " container_id
-                docker stop "$container_id"
-                echo "容器 $container_id 已停止。"
-                read -p "按回车键继续..." ;;
+                read -p "容器ID或名称: " cid
+                docker restart "$cid" && echo "已重启 $cid"
+                read -p "按回车继续…"
+                ;;
             5)
-                docker container prune -f
-                echo "已删除所有已停止的容器。"
-                read -p "按回车键继续..." ;;
+                docker ps --format "table {{.ID}}\t{{.Names}}"
+                read -p "容器ID或名称: " cid
+                docker exec -it "$cid" bash 2>/dev/null || docker exec -it "$cid" sh
+                read -p "按回车继续…"
+                ;;
             6)
-                docker image prune -a -f
-                echo "已删除所有未使用的镜像。"
-                read -p "按回车键继续..." ;;
-            7)
-                docker system prune -a -f
-                echo "已清理所有未使用资源。"
-                read -p "按回车键继续..." ;;
-            8)
-                docker system df
-                read -p "按回车键继续..." ;;
-            9)
-                docker ps -a --format "table {{.ID}}\t{{.Names}}\t{{.Status}}"
-                read -p "请输入要重启的容器ID或名称: " container_id
-                docker restart "$container_id"
-                echo "容器 $container_id 已重启。"
-                read -p "按回车键继续..." ;;
-            10)
-                docker ps -a --format "table {{.ID}}\t{{.Names}}"
-                read -p "请输入要查看日志的容器ID或名称: " container_id
-                docker logs --tail 50 "$container_id"
-                read -p "按回车键继续..." ;;
-            11)
-                docker ps -a --format "table {{.ID}}\t{{.Names}}"
-                read -p "请输入要进入的容器ID或名称: " container_id
-                docker exec -it "$container_id" bash || docker exec -it "$container_id" sh
-                read -p "按回车键继续..." ;;
+                read -p "标签键=值（如 app=web）: " lbl
+                echo "1) 启动 2) 停止 3) 重启 4) 删除"
+                read -p "操作: " op
+                containers=$(docker ps -a -q --filter "label=$lbl")
+                case $op in
+                    1) docker start $containers;;
+                    2) docker stop $containers;;
+                    3) docker restart $containers;;
+                    4) docker rm -f $containers;;
+                esac
+                echo "操作完成。"
+                read -p "按回车继续…"
+                ;;
+            7) docker images; read -p "按回车继续…";;
+            8) docker image prune -a -f; echo "已删除未使用镜像"; read -p "按回车继续…";;
+            9) docker system df; read -p "按回车继续…";;
+            10) docker container prune -f; echo "已删除已停止容器"; read -p "按回车继续…";;
+            11) docker system prune -a -f; echo "已清理所有未使用资源"; read -p "按回车继续…";;
             12)
-                docker ps -a --format "table {{.ID}}\t{{.Names}}"
-                read -p "请输入容器ID或名称: " container_id
-                read -p "请输入内存限制（例如 512m 或 1g，留空不修改）: " mem_limit
-                read -p "请输入 CPU 限制（如 0.5 表示50%，留空不修改）: " cpu_limit
-                update_cmd="docker update"
-                [[ -n "$mem_limit" ]] && update_cmd+=" --memory $mem_limit"
-                [[ -n "$cpu_limit" ]] && update_cmd+=" --cpus $cpu_limit"
-                update_cmd+=" $container_id"
-                eval "$update_cmd"
-                echo "资源限制已更新。"
-                read -p "按回车键继续..." ;;
+                read -p "设置定时清理（cron 表达式，例如：0 3 * * *）: " cron_expr
+                (crontab -l 2>/dev/null; echo "$cron_expr docker system prune -a -f") | crontab -
+                echo "定时清理已添加。"
+                read -p "按回车继续…"
+                ;;
             13)
                 docker ps -a --format "table {{.ID}}\t{{.Names}}"
-                read -p "请输入容器ID或名称: " container_id
-                echo "可用重启策略：no | always | unless-stopped | on-failure"
-                read -p "请输入重启策略: " restart_policy
-                docker update --restart="$restart_policy" "$container_id"
-                echo "重启策略已设置为 $restart_policy。"
-                read -p "按回车键继续..." ;;
-            0)
-                break ;;
+                read -p "容器ID或名称: " cid
+                docker logs --tail 100 -f "$cid"
+                ;;
+            14)
+                read -p "日志输出文件（完整路径）: " logf
+                echo "开始聚合所有容器日志到 $logf ..."
+                for id in $(docker ps -aq); do
+                    echo "==== 容器 $id 日志 ====" >> "$logf"
+                    docker logs "$id" >> "$logf" 2>&1
+                done
+                echo "聚合完成。"
+                read -p "按回车继续…"
+                ;;
+            15) docker stats --no-stream; read -p "按回车继续…";;
+            16)
+                docker ps -a --format "table {{.ID}}\t{{.Names}}"
+                read -p "容器ID或名称: " cid
+                read -p "内存限制 (e.g. 512m, 1g，留空跳过): " mem
+                read -p "CPU 限制 (e.g. 0.5，留空跳过): " cpu
+                cmd="docker update"
+                [[ -n "$mem" ]] && cmd+=" --memory $mem"
+                [[ -n "$cpu" ]] && cmd+=" --cpus $cpu"
+                cmd+=" $cid"
+                eval "$cmd" && echo "资源限制已更新"
+                read -p "按回车继续…"
+                ;;
+            17)
+                docker ps -a --format "table {{.ID}}\t{{.Names}}"
+                read -p "容器ID或名称: " cid
+                echo "策略: no | always | unless-stopped | on-failure"
+                read -p "输入策略: " pol
+                docker update --restart="$pol" "$cid" && echo "重启策略已设置"
+                read -p "按回车继续…"
+                ;;
+            18) docker network ls; read -p "按回车继续…";;
+            19)
+                read -p "网络名: " net
+                docker network create "$net" && echo "已创建 $net"
+                read -p "按回车继续…"
+                ;;
+            20)
+                read -p "网络名或ID: " net
+                docker network rm "$net" && echo "已删除 $net"
+                read -p "按回车继续…"
+                ;;
+            21) docker volume ls; read -p "按回车继续…";;
+            22)
+                read -p "要备份的卷名: " vol
+                read -p "备份输出文件（tar.gz）: " out
+                docker run --rm -v "${vol}":/data -v "$(pwd)":/backup ubuntu \
+                  tar czf "/backup/${out}" -C /data .
+                echo "已备份到 ${out}"
+                read -p "按回车继续…"
+                ;;
+            23)
+                read -p "要恢复的卷名: " vol
+                read -p "备份文件路径（tar.gz）: " infile
+                docker run --rm -v "${vol}":/data -v "$(dirname "$infile")":/backup ubuntu \
+                  tar xzf "/backup/$(basename "$infile")" -C /data
+                echo "已从 ${infile} 恢复到卷 ${vol}"
+                read -p "按回车继续…"
+                ;;
+            24)
+                read -p "要删除的卷名: " vol
+                docker volume rm "$vol" && echo "已删除 $vol"
+                read -p "按回车继续…"
+                ;;
+            25)
+                read -p "Compose 文件目录 (default: 当前): " dir
+                dir=${dir:-$(pwd)}
+                (cd "$dir" && docker compose up -d)
+                echo "Compose 服务已启动"
+                read -p "按回车继续…"
+                ;;
+            26)
+                read -p "Compose 文件目录 (default: 当前): " dir
+                dir=${dir:-$(pwd)}
+                (cd "$dir" && docker compose down)
+                echo "Compose 服务已关闭"
+                read -p "按回车继续…"
+                ;;
+            27)
+                read -p "Compose 文件目录 (default: 当前): " dir
+                dir=${dir:-$(pwd)}
+                (cd "$dir" && docker compose ps)
+                read -p "按回车继续…"
+                ;;
+            28)
+                read -p "Compose 文件目录 (default: 当前): " dir
+                dir=${dir:-$(pwd)}
+                (cd "$dir" && docker compose pull && docker compose up -d --force-recreate)
+                echo "Compose 服务已重建"
+                read -p "按回车继续…"
+                ;;
+            29)
+                echo "检查最新 Docker 版本并升级..."
+                sudo apt-get update
+                sudo apt-get install --only-upgrade -y docker-ce docker-ce-cli containerd.io
+                echo "升级完成。"
+                read -p "按回车继续…"
+                ;;
+            30)
+                read -p "确认完全卸载 Docker 及数据？(yes/[no]) " ans
+                if [[ "$ans" == "yes" ]]; then
+                    sudo systemctl stop docker
+                    sudo apt-get purge -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+                    sudo rm -rf /var/lib/docker /var/lib/containerd /etc/docker
+                    sudo rm -rf /etc/apt/keyrings/docker.gpg /etc/apt/sources.list.d/docker.list
+                    echo "Docker 已完全卸载。"
+                else
+                    echo "已取消卸载。"
+                fi
+                read -p "按回车继续…"
+                ;;
+            0) break;;
             *)
-                echo "无效的选项，请重新输入。"
-                sleep 1 ;;
+                echo "无效选项，请重试。"
+                sleep 1
+                ;;
         esac
     done
 }

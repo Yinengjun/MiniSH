@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 获取当前脚本的绝对路径
-SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
+SCRIPT_PATH="$(realpath "$0")"
 LINK_PATH="/usr/local/bin/v"
 
 # 安装逻辑

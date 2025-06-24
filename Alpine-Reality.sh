@@ -1,5 +1,5 @@
 # 原项目：https://github.com/lgdlkq/32m
-# 更改了获得Xray最新版本号的方法
+# 更改了获得Xray最新版本号的方法、支持IPv6
 
 #!/bin/bash
 RED="\033[31m"
@@ -139,7 +139,13 @@ EOF
 IP=$(wget -qO- --no-check-certificate -U Mozilla https://api.ip.sb/geoip | sed -n 's/.*"ip": *"\([^"]*\).*/\1/p')
 green "您的IP为：$IP"
 
-share_link="vless://$UUID@$IP:$port?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$dest_server&fp=chrome&pbk=$public_key&sid=$short_id&type=tcp&headerType=none#32M-Reality"
+if [[ "$IP" == *:* ]]; then
+    ip_display="[$IP]"
+else
+    ip_display="$IP"
+fi
+
+share_link="vless://$UUID@$ip_display:$port?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$dest_server&fp=chrome&pbk=$public_key&sid=$short_id&type=tcp&headerType=none#32M-Reality"
 echo ${share_link} > /root/Xray/share-link.txt
 
 cat << EOF > /root/Xray/clash-meta.yaml

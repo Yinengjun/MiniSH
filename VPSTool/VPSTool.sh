@@ -338,7 +338,7 @@ install_proxy_server_menu() {
                 ;;
             4)
                 echo "正在安装 32M-Reality-Alpine..."
-                apk update && apk add bash && wget https://raw.githubusercontent.com/lgdlkq/32m/main/xr_install.sh -O xr_install.sh && bash xr_install.sh
+                apk update && apk add bash && wget https://raw.githubusercontent.com/Yinengjun/MiniSH/refs/heads/main/Alpine-Reality.sh -O Alpine-Reality.sh && bash Alpine-Reality.sh
                 ;;
             0)
                 return

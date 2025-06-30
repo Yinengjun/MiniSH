@@ -640,6 +640,7 @@ tor_menu() {
             1) install_tor ;;
             2) uninstall_tor ;;  # 保留你已有的卸载函数
             3) test_tor ;;
+            4) check_tor_security ;;
             0) break ;;
             *) echo "无效选项，请重试。" ;;
         esac

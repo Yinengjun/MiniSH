@@ -384,8 +384,10 @@ install_tor() {
     sudo sed -i 's/^#*SocksPort.*/SocksPort 127.0.0.1:9050/' /etc/tor/torrc
 
     # 显式禁用 ControlPort
+    echo "🔒 正在禁用 ControlPort..."
     sudo sed -i '/^ControlPort/d' /etc/tor/torrc
     echo "# ControlPort 已禁用" | sudo tee -a /etc/tor/torrc >/dev/null
+    echo "✅ ControlPort 已禁用"
 
     echo "重启 Tor 服务..."
     sudo systemctl enable tor
@@ -461,20 +463,70 @@ test_tor() {
 
     if ! command -v torsocks >/dev/null 2>&1; then
         echo "未安装 torsocks，正在尝试安装..."
-        case "$OS_ID" in
-            ubuntu|debian) sudo apt install torsocks -y ;;
-            arch) sudo pacman -S torsocks --noconfirm ;;
-            centos|rhel) sudo yum install torsocks -y ;;
+        case "$OS_NAME" in
+            *Debian*|*Ubuntu*) sudo apt install torsocks -y ;;
+            *Arch*) sudo pacman -S torsocks --noconfirm ;;
+            *CentOS*|*RHEL*) sudo yum install torsocks -y ;;
         esac
     fi
 
-    torsocks curl -s https://check.torproject.org/ | grep -q "Congratulations" && {
-        echo "✅ Tor 正常工作，已匿名连接"
-    } || {
-        echo "❌ Tor 连接失败，请检查服务状态或防火墙"
+    try_request() {
+        torsocks curl -s https://check.torproject.org/ | grep -q "Congratulations"
     }
-}
 
+    if try_request; then
+        echo "✅ Tor 正常工作，已匿名连接"
+        return
+    fi
+
+    echo "❌ Tor 连接失败，正在进行自动排障..."
+
+    # Step 1: 检查服务状态
+    if systemctl is-active --quiet tor; then
+        echo "✅ Tor 服务正在运行"
+    else
+        echo "❌ Tor 服务未运行，尝试自动重启 Tor..."
+        sudo systemctl restart tor
+        sleep 2
+        if systemctl is-active --quiet tor; then
+            echo "✅ Tor 已成功重启"
+        else
+            echo "❌ 无法启动 Tor 服务，请手动检查 systemctl 日志"
+        fi
+    fi
+
+    # Step 2: 检查端口监听
+    echo "📡 当前监听端口（应有 127.0.0.1:9050）："
+    sudo ss -tnlp | grep 9050 || echo "⚠️ 未监听 9050，可能配置错误或服务未生效"
+
+    # Step 3: 显示 SocksPort 配置（用于人工确认）
+    echo "📝 torrc 文件中的 SocksPort 配置如下："
+    grep -E "^[#]*\s*SocksPort" /etc/tor/torrc || echo "⚠️ 未找到 SocksPort 配置"
+
+    # Step 4: 防火墙规则检查
+    echo "🔒 检查本地防火墙规则："
+    if has_ufw && sudo ufw status | grep -q "9050"; then
+        echo "✅ UFW 规则存在："
+        sudo ufw status | grep "9050"
+    elif sudo iptables -L INPUT -n | grep -q "9050"; then
+        echo "✅ iptables 规则存在："
+        sudo iptables -L INPUT -n | grep "9050"
+    else
+        echo "⚠️ 未检测到防火墙规则，可能未正确配置"
+    fi
+
+    # Step 5: 重试请求
+    echo "🔁 重试通过 Tor 请求..."
+    sleep 1
+    if try_request; then
+        echo "✅ 重试成功：Tor 已生效"
+    else
+        echo "❌ 重试仍失败，请检查以下内容："
+        echo "  - 是否正确设置 SocksPort 为 127.0.0.1:9050"
+        echo "  - 是否成功启动了 Tor 服务：sudo systemctl status tor"
+        echo "  - 查看日志：sudo journalctl -u tor 或 cat /var/log/tor/notices.log"
+    fi
+}
 
 # Tor 菜单
 tor_menu() {

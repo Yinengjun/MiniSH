@@ -632,6 +632,7 @@ tor_menu() {
         echo "1. 安装 Tor"
         echo "2. 卸载 Tor"
         echo "3. 测试 Tor 是否生效"
+        echo "4. 检查 Tor 安全性"
         echo "0. 返回上级菜单"
         echo "=============================="
         read -p "请输入选项: " TOR_OPTION

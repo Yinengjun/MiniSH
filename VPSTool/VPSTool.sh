@@ -362,21 +362,20 @@ has_ufw() {
 install_tor() {
     echo "正在安装 Tor..."
 
-    # 安装 Tor 和 torsocks
-    case "$OS_ID" in
-        ubuntu|debian)
+    case "$OS_NAME" in
+        *Debian*|*Ubuntu*|*debian*|*ubuntu*)
             sudo apt update
             sudo apt install tor torsocks -y
             ;;
-        arch)
+        *Arch*|*arch*)
             sudo pacman -Syu tor torsocks --noconfirm
             ;;
-        centos|rhel)
+        *CentOS*|*centos*|*RHEL*|*rhel*)
             sudo yum install epel-release -y
             sudo yum install tor torsocks -y
             ;;
         *)
-            echo "暂不支持的系统：$OS_ID"
+            echo "❌ 暂不支持的系统类型：$OS_NAME"
             return
             ;;
     esac
@@ -416,19 +415,19 @@ install_tor() {
 uninstall_tor() {
     echo "正在卸载 Tor..."
 
-    case "$OS_ID" in
-        ubuntu|debian)
+    case "$OS_NAME" in
+        *Debian*|*Ubuntu*|*debian*|*ubuntu*)
             sudo apt purge tor -y
             sudo apt autoremove --purge -y
             ;;
-        arch)
+        *Arch*|*arch*)
             sudo pacman -Rns tor --noconfirm
             ;;
-        centos|rhel)
+        *CentOS*|*centos*|*RHEL*|*rhel*)
             sudo yum remove tor -y
             ;;
         *)
-            echo "暂不支持的系统：$OS_ID"
+            echo "❌ 暂不支持的系统类型：$OS_NAME"
             return
             ;;
     esac

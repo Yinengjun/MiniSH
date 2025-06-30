@@ -381,7 +381,8 @@ install_tor() {
     esac
 
     echo "配置 torrc 文件..."
-    sudo sed -i 's/^#*SocksPort.*/SocksPort 127.0.0.1:9050/' /etc/tor/torrc
+    sudo sed -i '/^SocksPort/d' /etc/tor/torrc
+    echo "SocksPort 127.0.0.1:9050" | sudo tee -a /etc/tor/torrc >/dev/null
 
     # 显式禁用 ControlPort
     echo "🔒 正在禁用 ControlPort..."
@@ -515,7 +516,10 @@ test_tor() {
         echo "⚠️ 未检测到防火墙规则，可能未正确配置"
     fi
 
-    # Step 5: 重试请求
+    # Step 5: 自动修复 SocksPort 冲突
+    auto_fix_tor_socksport_conflict
+
+    # Step 6: 重试请求
     echo "🔁 重试通过 Tor 请求..."
     sleep 1
     if try_request; then
@@ -525,6 +529,98 @@ test_tor() {
         echo "  - 是否正确设置 SocksPort 为 127.0.0.1:9050"
         echo "  - 是否成功启动了 Tor 服务：sudo systemctl status tor"
         echo "  - 查看日志：sudo journalctl -u tor 或 cat /var/log/tor/notices.log"
+    fi
+}
+
+auto_fix_tor_socksport_conflict() {
+    # 检查日志里是否有端口绑定失败的典型提示
+    if sudo journalctl -u tor --no-pager -n 50 | grep -qiE 'Failed to bind|Address already in use'; then
+        echo "⚠️ 检测到 Tor 端口绑定失败，疑似 SocksPort 重复配置，尝试自动修复..."
+
+        # 备份原配置
+        sudo cp /etc/tor/torrc /etc/tor/torrc.bak.$(date +%s)
+
+        # 删除所有 SocksPort 配置，写入唯一正确配置
+        sudo sed -i '/^[#[:space:]]*SocksPort/d' /etc/tor/torrc
+        echo "SocksPort 127.0.0.1:9050" | sudo tee -a /etc/tor/torrc >/dev/null
+
+        echo "🔒 禁用 ControlPort..."
+        sudo sed -i '/^[#[:space:]]*ControlPort/d' /etc/tor/torrc
+        echo "# ControlPort 已禁用" | sudo tee -a /etc/tor/torrc >/dev/null
+
+        echo "尝试重启 Tor 服务..."
+        sudo systemctl restart tor
+        sleep 2
+
+        # 检查重启结果
+        if systemctl is-active --quiet tor; then
+            echo "✅ Tor 重启成功，重复端口配置问题已修复"
+        else
+            echo "❌ Tor 重启失败，请查看日志手动排查"
+        fi
+    fi
+}
+
+# 检查 Tor 安全性
+check_tor_security() {
+    echo "检查 Tor SocksPort 监听接口..."
+    LISTEN_ADDR=$(sudo ss -tnlp | grep 9050 | awk '{print $5}' | head -n1)
+    if [[ "$LISTEN_ADDR" == 127.0.0.1:9050 ]]; then
+        echo "✅ Tor 仅监听本地回环接口"
+    else
+        echo "❌ Tor 监听了非本地接口: $LISTEN_ADDR"
+    fi
+
+    echo "检查防火墙规则..."
+
+    check_firewall_9050
+
+    echo "请确保外部网络无法访问 9050 端口。"
+    echo "如有可用远程机器，请执行：nc -zv <你的IP> 9050，确认端口关闭。"
+}
+
+# 检查防火墙对端口 9050 的规则
+check_firewall_9050() {
+    echo "检测防火墙对端口 9050 的规则..."
+
+    if has_ufw; then
+        echo "检测 UFW 规则..."
+        ALLOW_LOCAL=$(sudo ufw status numbered | grep -E 'ALLOW IN.*127.0.0.1.*9050')
+        DENY_OTHERS=$(sudo ufw status numbered | grep -E 'DENY IN.*9050')
+
+        if [[ -n "$ALLOW_LOCAL" ]]; then
+            echo "✅ 存在允许本地访问的规则："
+            echo "$ALLOW_LOCAL"
+        else
+            echo "❌ 没有发现允许本地访问 9050 端口的规则"
+        fi
+
+        if [[ -n "$DENY_OTHERS" ]]; then
+            echo "✅ 存在拒绝其他来源访问的规则："
+            echo "$DENY_OTHERS"
+        else
+            echo "❌ 没有发现拒绝公网访问 9050 端口的规则"
+        fi
+
+    else
+        echo "检测 iptables 规则..."
+
+        ALLOW_LOCAL=$(sudo iptables -L INPUT -n --line-numbers | grep '9050' | grep -E 'ACCEPT.*127.0.0.1|ACCEPT.*lo')
+        DENY_OTHERS=$(sudo iptables -L INPUT -n --line-numbers | grep '9050' | grep -E 'DROP|REJECT')
+
+        if [[ -n "$ALLOW_LOCAL" ]]; then
+            echo "✅ 存在允许本地访问的规则："
+            echo "$ALLOW_LOCAL"
+        else
+            echo "❌ 没有发现允许本地访问 9050 端口的规则"
+        fi
+
+        if [[ -n "$DENY_OTHERS" ]]; then
+            echo "✅ 存在拒绝其他来源访问的规则："
+            echo "$DENY_OTHERS"
+        else
+            echo "❌ 没有发现拒绝公网访问 9050 端口的规则"
+        fi
     fi
 }
 

@@ -308,6 +308,7 @@ install_proxy_server_menu() {
         echo "2. X-UI"
         echo "3. Misaka-hysteria"
         echo "4. 32M-Reality-Alpine"
+        echo "5. Tor"
         echo "0. 返回主菜单"
         read -p "请输入选项: " PROXY_OPTION
 
@@ -340,6 +341,8 @@ install_proxy_server_menu() {
                 echo "正在安装 32M-Reality-Alpine..."
                 apk update && apk add bash && wget https://raw.githubusercontent.com/Yinengjun/MiniSH/refs/heads/main/Alpine-Reality.sh -O Alpine-Reality.sh && bash Alpine-Reality.sh
                 ;;
+            5) tor_menu
+                ;;
             0)
                 return
                 ;;
@@ -349,6 +352,153 @@ install_proxy_server_menu() {
         esac
     done
 }
+
+# 检查是否安装了 ufw
+has_ufw() {
+    command -v ufw >/dev/null 2>&1
+}
+
+# 安装Tor函数
+install_tor() {
+    echo "正在安装 Tor..."
+
+    # 安装 Tor 和 torsocks
+    case "$OS_ID" in
+        ubuntu|debian)
+            sudo apt update
+            sudo apt install tor torsocks -y
+            ;;
+        arch)
+            sudo pacman -Syu tor torsocks --noconfirm
+            ;;
+        centos|rhel)
+            sudo yum install epel-release -y
+            sudo yum install tor torsocks -y
+            ;;
+        *)
+            echo "暂不支持的系统：$OS_ID"
+            return
+            ;;
+    esac
+
+    echo "配置 torrc 文件..."
+    sudo sed -i 's/^#*SocksPort.*/SocksPort 127.0.0.1:9050/' /etc/tor/torrc
+
+    # 显式禁用 ControlPort
+    sudo sed -i '/^ControlPort/d' /etc/tor/torrc
+    echo "# ControlPort 已禁用" | sudo tee -a /etc/tor/torrc >/dev/null
+
+    echo "重启 Tor 服务..."
+    sudo systemctl enable tor
+    sudo systemctl restart tor
+
+    echo "设置防火墙（仅允许本地访问）..."
+    if has_ufw; then
+        sudo ufw allow from 127.0.0.1 to any port 9050
+        sudo ufw deny 9050
+    else
+        sudo iptables -A INPUT -i lo -p tcp --dport 9050 -j ACCEPT
+        sudo iptables -A INPUT -p tcp --dport 9050 ! -s 127.0.0.1 -j DROP
+    fi
+
+    echo "确认 SocksPort 是否限制为本地接口..."
+    if grep -E "^SocksPort" /etc/tor/torrc | grep -q "127.0.0.1"; then
+        echo "✅ SocksPort 正确监听在 127.0.0.1:9050"
+    else
+        echo "❌ SocksPort 未限制为本地接口，请检查 torrc 配置"
+    fi
+
+    echo "当前监听端口："
+    sudo netstat -tnlp | grep 9050 || sudo ss -tnlp | grep 9050
+}
+
+# 卸载Tor函数
+uninstall_tor() {
+    echo "正在卸载 Tor..."
+
+    case "$OS_ID" in
+        ubuntu|debian)
+            sudo apt purge tor -y
+            sudo apt autoremove --purge -y
+            ;;
+        arch)
+            sudo pacman -Rns tor --noconfirm
+            ;;
+        centos|rhel)
+            sudo yum remove tor -y
+            ;;
+        *)
+            echo "暂不支持的系统：$OS_ID"
+            return
+            ;;
+    esac
+
+    echo "删除配置和缓存..."
+    sudo rm -rf /etc/tor/
+    sudo rm -rf /var/lib/tor/
+    sudo rm -rf ~/.tor/
+    sudo rm -f /var/log/tor/*
+
+    echo "关闭服务..."
+    sudo systemctl stop tor
+    sudo systemctl disable tor
+
+    echo "检查端口状态..."
+    sudo ss -tnlp | grep 9050 || echo "9050端口未监听"
+
+    echo "撤销防火墙规则..."
+    if has_ufw; then
+        sudo ufw delete allow from 127.0.0.1 to any port 9050
+        sudo ufw delete deny 9050
+    else
+        sudo iptables -D INPUT -i lo -p tcp --dport 9050 -j ACCEPT 2>/dev/null
+        sudo iptables -D INPUT -p tcp --dport 9050 ! -s 127.0.0.1 -j DROP 2>/dev/null
+    fi
+}
+
+# 测试 Tor
+test_tor() {
+    echo "正在测试 Tor 是否能正常代理请求..."
+
+    if ! command -v torsocks >/dev/null 2>&1; then
+        echo "未安装 torsocks，正在尝试安装..."
+        case "$OS_ID" in
+            ubuntu|debian) sudo apt install torsocks -y ;;
+            arch) sudo pacman -S torsocks --noconfirm ;;
+            centos|rhel) sudo yum install torsocks -y ;;
+        esac
+    fi
+
+    torsocks curl -s https://check.torproject.org/ | grep -q "Congratulations" && {
+        echo "✅ Tor 正常工作，已匿名连接"
+    } || {
+        echo "❌ Tor 连接失败，请检查服务状态或防火墙"
+    }
+}
+
+
+# Tor 菜单
+tor_menu() {
+    while true; do
+        clear
+        echo "======== Tor 管理菜单 ========"
+        echo "1. 安装 Tor"
+        echo "2. 卸载 Tor"
+        echo "3. 测试 Tor 是否生效"
+        echo "0. 返回上级菜单"
+        echo "=============================="
+        read -p "请输入选项: " TOR_OPTION
+        case $TOR_OPTION in
+            1) install_tor ;;
+            2) uninstall_tor ;;  # 保留你已有的卸载函数
+            3) test_tor ;;
+            0) break ;;
+            *) echo "无效选项，请重试。" ;;
+        esac
+        read -p "按 Enter 键继续..." dummy
+    done
+}
+
 
 # 微型机哪吒被控端优化
 optimize_nezha() {

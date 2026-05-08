@@ -818,6 +818,7 @@ function test_menu() {
     echo "4. Speedtest（Bench.im）"
     echo "5. HyperSpeed三网测速"
     echo "6. iPerf3"
+    echo "7. 大小包检测"
     echo "0. 返回主菜单"
     echo "====================="
     read -p "请选择一个选项: " choice
@@ -845,6 +846,9 @@ function test_menu() {
         6)
             iperf3_menu
             ;;
+        7)
+            packet_size_test
+            ;;
         0)
             main_menu  # 假设有主菜单功能
             ;;
@@ -853,6 +857,139 @@ function test_menu() {
             test_menu
             ;;
     esac
+}
+
+packet_size_test() {
+    export LANG=C
+
+    TARGETS=(
+    "223.5.5.5 AliDNS"
+    "119.29.29.29 DNSPod"
+    "180.76.76.76 BaiduDNS"
+    )
+
+    PING_SIZES=(56 200 500 1000 1400)
+
+    RED='\033[31m'
+    GREEN='\033[32m'
+    YELLOW='\033[33m'
+    BLUE='\033[36m'
+    BOLD='\033[1m'
+    RESET='\033[0m'
+
+    RESULTS=()
+
+    line() {
+        printf "%b\n" "${BLUE}============================================================${RESET}"
+    }
+
+    title() {
+        printf "\n%b%s%b\n" "${BOLD}${GREEN}" "$1" "${RESET}"
+    }
+
+    need_cmd() {
+        command -v "$1" >/dev/null 2>&1
+    }
+
+    install_tools() {
+        title "[Init] Checking tools"
+        PKGS=()
+        need_cmd ping || PKGS+=("iputils-ping")
+        [ ${#PKGS[@]} -eq 0 ] && {
+            echo -e "${GREEN}All tools already installed${RESET}"
+            return
+        }
+        echo "Installing: ${PKGS[*]}"
+        if need_cmd apt; then
+            apt update -y >/dev/null 2>&1
+            apt install -y "${PKGS[@]}"
+        elif need_cmd yum; then
+            yum install -y "${PKGS[@]}"
+        elif need_cmd apk; then
+            apk add "${PKGS[@]}"
+        else
+            echo -e "${RED}Unsupported package manager${RESET}"
+            exit 1
+        fi
+    }
+
+    score_latency() {
+        local latency=$1
+        awk -v l="$latency" 'BEGIN{
+            if (l < 60) print "Excellent";
+            else if (l < 120) print "Good";
+            else if (l < 180) print "Normal";
+            else print "Poor";
+        }'
+    }
+
+    ping_test() {
+        local ip=$1
+        local name=$2
+        title "[$name] $ip"
+        printf "%-10s %-12s %-12s %-12s %-12s\n" \
+            "Packet" "Avg" "Min" "Max" "Mdev"
+        local first_avg=0
+        local last_avg=0
+        for size in "${PING_SIZES[@]}"; do
+            result=$(ping -c 10 -s "$size" -W 1 "$ip" 2>/dev/null)
+            stat=$(echo "$result" | grep 'min/avg/max')
+            if [ -z "$stat" ]; then
+                printf "%-10s ${RED}FAILED${RESET}\n" "$size"
+                continue
+            fi
+            parsed=$(echo "$stat" | awk -F '=' '{print $2}' | tr -d ' ')
+            min=$(echo "$parsed" | cut -d '/' -f1)
+            avg=$(echo "$parsed" | cut -d '/' -f2)
+            max=$(echo "$parsed" | cut -d '/' -f3)
+            mdev=$(echo "$parsed" | cut -d '/' -f4)
+            [ "$size" = "56" ] && first_avg=$avg
+            [ "$size" = "1400" ] && last_avg=$avg
+            printf "%-10s %-12sms %-12sms %-12sms %-12sms\n" \
+                "$size" "$avg" "$min" "$max" "$mdev"
+        done
+        delta=$(awk -v a="$first_avg" -v b="$last_avg" 'BEGIN{printf "%.2f", b-a}')
+        grade=$(score_latency "$first_avg")
+        echo
+        if awk "BEGIN{exit !($delta > 30)}"; then
+            echo -e "Large Packet Impact : ${RED}+${delta} ms${RESET}"
+        else
+            echo -e "Large Packet Impact : ${GREEN}${delta} ms${RESET}"
+        fi
+        echo -e "Line Quality        : ${YELLOW}${grade}${RESET}"
+        RESULTS+=("$name|$first_avg|$delta|$grade")
+    }
+
+    summary() {
+        line
+        title "SUMMARY"
+        printf "%-12s %-12s %-15s %-12s\n" \
+            "Target" "Latency" "LargePktΔ" "Quality"
+        for item in "${RESULTS[@]}"; do
+            name=$(echo "$item" | cut -d '|' -f1)
+            latency=$(echo "$item" | cut -d '|' -f2)
+            delta=$(echo "$item" | cut -d '|' -f3)
+            quality=$(echo "$item" | cut -d '|' -f4)
+            printf "%-12s %-12sms %-15sms %-12s\n" \
+                "$name" "$latency" "$delta" "$quality"
+        done
+        line
+    }
+
+    clear
+    line
+    echo -e "${BOLD} China Line Quality Test${RESET}"
+    echo " Small Packet vs Large Packet"
+    line
+    install_tools
+    for target in "${TARGETS[@]}"; do
+        ip=$(echo "$target" | awk '{print $1}')
+        name=$(echo "$target" | awk '{print $2}')
+        ping_test "$ip" "$name"
+        line
+    done
+    summary
+    read -p "按回车键返回..." temp
 }
 
 # 显示 系统设置菜单

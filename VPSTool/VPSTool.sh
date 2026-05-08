@@ -892,14 +892,14 @@ packet_size_test() {
     }
 
     install_tools() {
-        title "[Init] Checking tools"
+        title "[初始化] 检查工具"
         PKGS=()
         need_cmd ping || PKGS+=("iputils-ping")
         [ ${#PKGS[@]} -eq 0 ] && {
-            echo -e "${GREEN}All tools already installed${RESET}"
+            echo -e "${GREEN}所有工具已安装${RESET}"
             return
         }
-        echo "Installing: ${PKGS[*]}"
+        echo "正在安装: ${PKGS[*]}"
         if need_cmd apt; then
             apt update -y >/dev/null 2>&1
             apt install -y "${PKGS[@]}"
@@ -908,7 +908,7 @@ packet_size_test() {
         elif need_cmd apk; then
             apk add "${PKGS[@]}"
         else
-            echo -e "${RED}Unsupported package manager${RESET}"
+            echo -e "${RED}不支持的包管理器${RESET}"
             exit 1
         fi
     }
@@ -916,10 +916,10 @@ packet_size_test() {
     score_latency() {
         local latency=$1
         awk -v l="$latency" 'BEGIN{
-            if (l < 60) print "Excellent";
-            else if (l < 120) print "Good";
-            else if (l < 180) print "Normal";
-            else print "Poor";
+            if (l < 60) print "优秀";
+            else if (l < 120) print "良好";
+            else if (l < 180) print "一般";
+            else print "较差";
         }'
     }
 
@@ -928,14 +928,14 @@ packet_size_test() {
         local name=$2
         title "[$name] $ip"
         printf "%-10s %-12s %-12s %-12s %-12s\n" \
-            "Packet" "Avg" "Min" "Max" "Mdev"
+            "包大小" "平均" "最低" "最高" "抖动"
         local first_avg=0
         local last_avg=0
         for size in "${PING_SIZES[@]}"; do
             result=$(ping -c 10 -s "$size" -W 1 "$ip" 2>/dev/null)
             stat=$(echo "$result" | grep 'min/avg/max')
             if [ -z "$stat" ]; then
-                printf "%-10s ${RED}FAILED${RESET}\n" "$size"
+                printf "%-10s ${RED}失败${RESET}\n" "$size"
                 continue
             fi
             parsed=$(echo "$stat" | awk -F '=' '{print $2}' | tr -d ' ')
@@ -952,19 +952,19 @@ packet_size_test() {
         grade=$(score_latency "$first_avg")
         echo
         if awk "BEGIN{exit !($delta > 30)}"; then
-            echo -e "Large Packet Impact : ${RED}+${delta} ms${RESET}"
+            echo -e "大包影响     : ${RED}+${delta} ms${RESET}"
         else
-            echo -e "Large Packet Impact : ${GREEN}${delta} ms${RESET}"
+            echo -e "大包影响     : ${GREEN}+${delta} ms${RESET}"
         fi
-        echo -e "Line Quality        : ${YELLOW}${grade}${RESET}"
+        echo -e "线路质量     : ${YELLOW}${grade}${RESET}"
         RESULTS+=("$name|$first_avg|$delta|$grade")
     }
 
     summary() {
         line
-        title "SUMMARY"
+        title "测试结果汇总"
         printf "%-12s %-12s %-15s %-12s\n" \
-            "Target" "Latency" "LargePktΔ" "Quality"
+            "目标" "延迟" "大包差值" "质量"
         for item in "${RESULTS[@]}"; do
             name=$(echo "$item" | cut -d '|' -f1)
             latency=$(echo "$item" | cut -d '|' -f2)
@@ -978,8 +978,8 @@ packet_size_test() {
 
     clear
     line
-    echo -e "${BOLD} China Line Quality Test${RESET}"
-    echo " Small Packet vs Large Packet"
+    echo -e "${BOLD} 线路质量测试${RESET}"
+    echo " 小包 vs 大包 延迟对比"
     line
     install_tools
     for target in "${TARGETS[@]}"; do

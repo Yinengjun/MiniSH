@@ -789,19 +789,128 @@ iperf3_menu() {
         read -p "请选择一个选项: " choice
 
         case $choice in
-            1) 
+            1)
                 install_iperf3
                 ;;
-            2) 
+            2)
                 start_server
                 ;;
-            3) 
+            3)
                 start_client
                 ;;
-            4) 
+            4)
                 exit 0
                 ;;
-            *) 
+            *)
+                echo "无效选项，请重试。"
+                ;;
+        esac
+    done
+}
+
+# 安装 hping3
+install_hping3() {
+    clear
+    OS_NAME=$(get_os_name)
+    if [[ "$OS_NAME" == *"Debian"* ]] || [[ "$OS_NAME" == *"Ubuntu"* ]]; then
+        sudo apt install hping3 -y
+    elif [[ "$OS_NAME" == *"CentOS"* ]]; then
+        sudo yum install epel-release -y && sudo yum install hping3 -y
+    elif [[ "$OS_NAME" == *"Alpine"* ]]; then
+        sudo apk add hping3
+    else
+        echo "当前系统不支持自动安装 hping3。请手动安装。"
+    fi
+}
+
+# 启动 hping3 服务端（监听模式）
+start_hping3_server() {
+    clear
+    read -p "请输入监听签名（默认 HelloWorld）: " signature
+    signature=${signature:-HelloWorld}
+    read -p "请输入监听网络接口（默认 eth0）: " interface
+    interface=${interface:-eth0}
+    echo "启动 hping3 服务端（监听模式），按 Ctrl+C 停止..."
+    sudo hping3 --listen "$signature" -I "$interface"
+}
+
+# 启动 hping3 客户端
+start_hping3_client() {
+    clear
+    read -p "请输入目标 IP: " target
+    if [[ -z "$target" ]]; then
+        echo "目标 IP 不能为空。"
+        return
+    fi
+
+    echo "请选择模式："
+    echo "1. TCP SYN（默认）"
+    echo "2. UDP"
+    echo "3. ICMP"
+    read -p "请输入选项: " mode
+    mode=${mode:-1}
+    case $mode in
+        1) mode_flag="-S" ;;
+        2) mode_flag="--udp" ;;
+        3) mode_flag="-1" ;;
+        *) mode_flag="-S" ;;
+    esac
+
+    command="sudo hping3 $mode_flag $target"
+
+    if [[ "$mode" != "3" ]]; then
+        read -p "请输入目标端口（默认 80）: " port
+        port=${port:-80}
+        command="$command -p $port"
+    fi
+
+    read -p "请输入发送数据包数量（默认 10，0 表示无限）: " count
+    count=${count:-10}
+    if [[ "$count" != "0" ]]; then
+        command="$command -c $count"
+    fi
+
+    read -p "请输入数据大小（字节，默认 0）: " size
+    size=${size:-0}
+    if [[ "$size" != "0" ]]; then
+        command="$command -d $size"
+    fi
+
+    read -p "请输入发包间隔（如 u1000 表示 1ms，留空不限制）: " interval
+    if [[ -n "$interval" ]]; then
+        command="$command -i $interval"
+    fi
+
+    echo "执行: $command"
+    eval $command
+}
+
+# 显示 hping3 菜单
+hping3_menu() {
+    clear
+    while true; do
+        echo "=== hping3 测试菜单 ==="
+        echo "1. 安装 hping3"
+        echo "2. 启动服务端"
+        echo "3. 启动客户端"
+        echo "4. 退出"
+
+        read -p "请选择一个选项: " choice
+
+        case $choice in
+            1)
+                install_hping3
+                ;;
+            2)
+                start_hping3_server
+                ;;
+            3)
+                start_hping3_client
+                ;;
+            4)
+                break
+                ;;
+            *)
                 echo "无效选项，请重试。"
                 ;;
         esac
@@ -819,6 +928,7 @@ function test_menu() {
     echo "5. HyperSpeed三网测速"
     echo "6. iPerf3"
     echo "7. 大小包检测"
+    echo "8. hping3"
     echo "0. 返回主菜单"
     echo "====================="
     read -p "请选择一个选项: " choice
@@ -848,6 +958,9 @@ function test_menu() {
             ;;
         7)
             packet_size_test
+            ;;
+        8)
+            hping3_menu
             ;;
         0)
             main_menu  # 假设有主菜单功能
